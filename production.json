@@ -1,0 +1,6 @@
+[
+    {
+      "ParameterValue": "datalake.production.aws",
+      "ParameterKey": "SourceDataBucketName"
+    }  
+ ]

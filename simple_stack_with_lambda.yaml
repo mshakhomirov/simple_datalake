@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS S3 data lake stack.
+Parameters:
+
+  SourceDataBucketName:
+    Description: Data lake bucket with source data files.
+    Type: String
+    Default: datalake.staging.aws
+
+  StackPackageS3Key:
+    Type: String
+    Default: pipeline_orchestrator/stack.zip
+
+Resources:
+
+  DatalakeBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: 
+        # !Sub '${DatalakeBucket}'
+        Ref: SourceDataBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        LambdaConfigurations:
+        - Event: s3:ObjectCreated:*
+          Function:
+            Fn::GetAtt:
+            - OrchestratorLambda
+            - Arn
+  #         # Filter:
+  #         #   S3Key:
+  #         #     Rules:
+  #         #     - Name: prefix
+  #         #       Value: source/
+
+### Add permission to invoke Lambda ###
+# This permission and bucket have to be deployed in two stages
+# Otherwise you will face circular dependency error (when bucket doesnt exist but Permission already relies on it.)
+# 1. Deploy a stack without ProcessingLambdaPermission
+# 2. Add ProcessingLambdaPermission and deploy again
+  ProcessingLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref OrchestratorLambda
+      # FunctionName:
+      #   Fn::GetAtt:
+      #     - OrchestratorLambda
+      #     - Arn
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub 'arn:aws:s3:::${DatalakeBucket}'
+      # SourceArn: arn:aws:s3:::datalake.production.aws
+      SourceAccount: !Ref AWS::AccountId
+
+
+  OrchestratorLambda:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    DependsOn: OrchestratorLambdaPolicy
+    Properties:
+      FunctionName: pipeline-orchestrator
+      Handler: pipeline_orchestrator/app.lambda_handler
+      Description: Microservice that orchestrates ETL and data loading from AWS S3 to data warehouse.
+      Environment:
+        Variables:
+          DEBUG: true
+      Role: !GetAtt OrchestratorLambdaRole.Arn #arn:aws:iam::868393081606:role/my-lambda-role
+      Code:
+        S3Bucket: orchestrator-lambda.code.aws
+        # S3Key: pipeline_orchestrator/stack.zip
+        S3Key:
+          Ref: StackPackageS3Key
+      Runtime: python3.8
+      Timeout: 300
+      MemorySize: 128
+
+
+  OrchestratorLambdaLogGroup:
+    DeletionPolicy: Delete
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+      LogGroupName: /aws/lambda/pipeline-orchestrator
+
+
+  # we will need a security role to create a Lambda
+  OrchestratorLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+
+  OrchestratorLambdaPolicy:
+    Type: AWS::IAM::Policy
+    DependsOn: OrchestratorLambdaRole
+    Properties:
+      Roles:
+        - !Ref OrchestratorLambdaRole
+      PolicyName: 'pipeline-orchestrator-lambda-policy'
+      PolicyDocument:
+        {
+          "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "",
+                    "Effect": "Allow",
+                    "Action": "s3:*",
+                    "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:*"
+                  ],
+                  "Resource": [
+                    "*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:*"
+                  ],
+                  "Resource": "*"
+                }
+            ]
+        }

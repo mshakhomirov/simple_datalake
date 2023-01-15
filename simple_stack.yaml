@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS S3 data lake stack.
+Parameters:
+
+  SourceDataBucketName:
+    Description: Data lake bucket with source data files.
+    Type: String
+    Default: datalake.staging.aws
+
+Resources:
+
+  DatalakeBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName:
+        Ref: SourceDataBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
