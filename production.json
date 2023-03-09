@@ -1,6 +1,6 @@
 [
     {
-      "ParameterValue": "datalake.production.aws",
+      "ParameterValue": "datalake20230903.production.aws",
       "ParameterKey": "SourceDataBucketName"
     }  
  ]

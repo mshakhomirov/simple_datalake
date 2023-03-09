@@ -1,3 +1,4 @@
+#  Step 1. Deploy just the bucket
 AWSTemplateFormatVersion: '2010-09-09'
 Description: AWS S3 data lake stack.
 Parameters:
@@ -25,6 +26,8 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+# Step 1 ends here.
+# Step 4: deploy after ProcessingLambdaPermission (Step 3)
       NotificationConfiguration:
         LambdaConfigurations:
         - Event: s3:ObjectCreated:*
@@ -32,17 +35,19 @@ Resources:
             Fn::GetAtt:
             - OrchestratorLambda
             - Arn
-  #         # Filter:
-  #         #   S3Key:
-  #         #     Rules:
-  #         #     - Name: prefix
-  #         #       Value: source/
+          # Filter:
+          #   S3Key:
+          #     Rules:
+          #     - Name: prefix
+          #       Value: source/
 
 ### Add permission to invoke Lambda ###
 # This permission and bucket have to be deployed in two stages
 # Otherwise you will face circular dependency error (when bucket doesnt exist but Permission already relies on it.)
 # 1. Deploy a stack without ProcessingLambdaPermission
 # 2. Add ProcessingLambdaPermission and deploy again
+
+# Step 3. Deploy after Step 2 (OrchestratorLambda and associated resources).
   ProcessingLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -54,10 +59,11 @@ Resources:
       #     - Arn
       Principal: s3.amazonaws.com
       SourceArn: !Sub 'arn:aws:s3:::${DatalakeBucket}'
-      # SourceArn: arn:aws:s3:::datalake.production.aws
+      # SourceArn: arn:aws:s3:::datalake20230903.production.aws
       SourceAccount: !Ref AWS::AccountId
+#  Step3 ends here. 
 
-
+#  Step 2. Deploy after Step 1 (DatalakeBucket)
   OrchestratorLambda:
     Type: AWS::Lambda::Function
     DeletionPolicy: Delete
@@ -138,3 +144,4 @@ Resources:
                 }
             ]
         }
+# Step 2 ends here.
